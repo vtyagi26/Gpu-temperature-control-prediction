@@ -7,8 +7,7 @@ import os
 RAW_CSV_FILE = 'gpu_telemetry_sim.csv' # Make sure this matches your raw log file
 OUTPUT_NPZ_FILE = 'gpu_sequences.npz'
 
-# 1. --- FEATURE MISMATCH FIX ---
-# We now use all 5 features, in the exact order the model expects.
+# 1. We use all 5 features, in the exact order the model expects.
 FEATURES = [
     'temp_c',
     'power_w',
@@ -18,9 +17,7 @@ FEATURES = [
 ]
 TARGET_COLUMN = 'temp_c'
 
-# 2. --- NORMALIZATION MISMATCH FIX ---
-# We use simple division, matching the DENORM_* values in model.py
-# (No more MinMaxScaler or .pkl file)
+# 2. We use simple division, matching the DENORM_* values in model.py
 NORM_VALUES = {
     'temp_c': 100.0,
     'power_w': 300.0,
@@ -29,8 +26,7 @@ NORM_VALUES = {
     'clock_graphics_mhz': 2000.0
 }
 
-# 3. --- TIME MISMATCH FIX ---
-# We set LOOKBACK to 30 (past) and predict the *very next* timestep
+# 3. We set LOOKBACK to 30 (past) and predict the *very next* timestep
 # to match the model's DELTA_T = 1.0.
 LOOKBACK = 30
 # ---------------------

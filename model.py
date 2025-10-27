@@ -5,34 +5,26 @@ from tensorflow.keras.callbacks import Callback
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.utils import shuffle # --- !!! NEW IMPORT !!! ---
+from sklearn.utils import shuffle
 
 
-# --- Model Configuration ---
-TIMESTEPS = 30      # 30 seconds of past data
-NUM_FEATURES = 5    # 0:temp, 1:power, 2:fan, 3:util, 4:clock
-# LAMBDA_PHYSICS is now controlled by the model and callback
-DELTA_T = 1.0           # seconds between samples
-T_AMBIENT = 25.0        # ambient temperature (°C)
+TIMESTEPS = 30     
+NUM_FEATURES = 5   
+DELTA_T = 1.0         
+T_AMBIENT = 25.0       
 
-# --- De-normalization Constants ---
 DENORM_TEMP = 100.0
 DENORM_POWER = 300.0
 DENORM_FAN = 100.0
 DENORM_UTIL = 100.0
 DENORM_CLOCK = 2000.0
 
-# --- Custom Callback for Loss Annealing ---
 class LossAnnealingCallback(Callback):
-    """
-    Gradually increases the physics loss weight (lambda) during training.
-    """
     def __init__(self, schedule):
         super(LossAnnealingCallback, self).__init__()
-        self.schedule = schedule # e.g., {0: 0.0, 20: 0.1, 40: 1.0}
+        self.schedule = schedule 
 
     def on_epoch_begin(self, epoch, logs=None):
-        # Find the correct lambda for the current epoch
         current_lambda = 1.0 # Default
         for epoch_threshold in sorted(self.schedule.keys()):
             if epoch >= epoch_threshold:
@@ -51,10 +43,8 @@ class PhysicsInformedLSTM(Model):
         self.timesteps = timesteps
         self.num_features = num_features
 
-        # Lambda is a non-trainable variable, controlled by the callback
         self.lambda_physics = tf.Variable(0.0, trainable=False, name="lambda_physics", dtype=tf.float32)
 
-        # --- Learnable physical parameters ---
         self.C_thermal = self.add_weight(
             name='C_thermal_capacitance',
             shape=(1,),
@@ -71,12 +61,10 @@ class PhysicsInformedLSTM(Model):
         # --- !!! CHANGED: Simplified Architecture !!! ---
         # A simpler model is less likely to get stuck in bad local minima
         self.lstm = LSTM(32, activation='tanh', input_shape=(timesteps, num_features), return_sequences=False) 
-        # self.dense1 = Dense(32, activation='tanh') # Removed this layer
         self.out_temp = Dense(1, name='temp_output')
 
     def call(self, inputs, training=False):
         x = self.lstm(inputs)
-        # x = self.dense1(x) # Removed this layer
         temp_pred_n = self.out_temp(x)
         return temp_pred_n
 
@@ -103,7 +91,6 @@ class PhysicsInformedLSTM(Model):
             data_loss = tf.reduce_mean(tf.square(y_batch_n - T_pred_n))
             physics_loss = self.compute_physics_loss(X_batch, T_pred_n)
             
-            # Use the variable lambda
             total_loss = data_loss + (self.lambda_physics * physics_loss)
 
         gradients = tape.gradient(total_loss, self.trainable_variables)
@@ -131,7 +118,6 @@ class PhysicsInformedLSTM(Model):
                 "data_loss": data_loss,
                 "physics_loss": physics_loss}
 
-# --- Main execution ---
 if __name__ == "__main__":
     
     print("--- Loading Data ---")
@@ -176,7 +162,6 @@ if __name__ == "__main__":
     
     model.compile(optimizer=tf.keras.optimizers.Adam(3e-4)) 
 
-    # --- !!! CHANGED: Adjusted Annealing Schedule !!! ---
     # Give the data-only phase more time to find a good solution
     annealing_schedule = {
         0: 0.0,

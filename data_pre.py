@@ -3,11 +3,9 @@ import numpy as np
 import sys
 import os
 
-# --- Configuration ---
-RAW_CSV_FILE = 'gpu_telemetry_sim.csv' # Make sure this matches your raw log file
+RAW_CSV_FILE = 'gpu_telemetry_sim.csv'
 OUTPUT_NPZ_FILE = 'gpu_sequences.npz'
 
-# 1. We use all 5 features, in the exact order the model expects.
 FEATURES = [
     'temp_c',
     'power_w',
@@ -17,7 +15,6 @@ FEATURES = [
 ]
 TARGET_COLUMN = 'temp_c'
 
-# 2. We use simple division, matching the DENORM_* values in model.py
 NORM_VALUES = {
     'temp_c': 100.0,
     'power_w': 300.0,
@@ -26,10 +23,7 @@ NORM_VALUES = {
     'clock_graphics_mhz': 2000.0
 }
 
-# 3. We set LOOKBACK to 30 (past) and predict the *very next* timestep
-# to match the model's DELTA_T = 1.0.
 LOOKBACK = 30
-# ---------------------
 
 def preprocess():
     print(f"--- Loading raw data from '{RAW_CSV_FILE}' ---")
@@ -40,11 +34,9 @@ def preprocess():
         print("Please ensure your data log file is named correctly.")
         sys.exit(1)
 
-    # --- 2. Sort by timestamp if available ---
     if 'timestamp' in df.columns:
         df = df.sort_values('timestamp').reset_index(drop=True)
 
-    # --- 3. Select relevant features ---
     missing = [f for f in FEATURES if f not in df.columns]
     if missing:
         print(f"❌ Error: Missing required columns in CSV: {missing}")
@@ -53,14 +45,11 @@ def preprocess():
             
     df_features = df[FEATURES].copy()
 
-    # --- 4. Handle missing or NaN values ---
-    # Use ffill/bfill which are the new methods
     df_features = df_features.interpolate(method='linear').ffill().bfill()
     if df_features.isnull().values.any():
         print("❌ Error: Data still contains NaNs after filling. Check raw data.")
         sys.exit(1)
 
-    # --- 5. Normalize features ---
     print("--- Normalizing data using simple division ---")
     for col, norm_val in NORM_VALUES.items():
         if col not in df_features:
@@ -72,7 +61,6 @@ def preprocess():
     # Clip values to [0, 1] (or slightly higher for robustness)
     df_features = df_features.clip(0.0, 1.0)
 
-    # --- 6. Create Sequences (X) and Targets (y) ---
     print(f"--- Creating sequences with length {LOOKBACK} (predicting 1 step ahead) ---")
     
     feature_data = df_features.to_numpy()
@@ -80,12 +68,9 @@ def preprocess():
 
     sequences_X, targets_y = [], []
 
-    # We loop from LOOKBACK until the end of the dataframe
     for i in range(LOOKBACK, len(feature_data)):
-        # Input sequence (X) is from [i - LOOKBACK] up to (but not including) [i]
         X_window = feature_data[i - LOOKBACK : i]
         
-        # Target (y) is the temperature at step [i] (the *next* step)
         y_target = target_data[i]
         
         sequences_X.append(X_window)
@@ -99,7 +84,6 @@ def preprocess():
     X = np.array(sequences_X)
     y = np.array(targets_y).reshape(-1, 1)
 
-    # --- 7. Save Preprocessed Data ---
     np.savez(OUTPUT_NPZ_FILE, X=X, y=y)
     print(f"\n✅ Saved preprocessed sequences to {OUTPUT_NPZ_FILE}")
     print(f"📊 X shape: {X.shape}  |  y shape: {y.shape}")
@@ -108,7 +92,6 @@ def preprocess():
         print(f"--- !!! CRITICAL ERROR !!! ---")
         print(f"Output shape {X.shape} does not have {len(FEATURES)} features.")
         
-    # --- 8. Preview Sample ---
     print("\n🔹 Sample input sequence (first 5 timesteps):")
     print(pd.DataFrame(X[0], columns=FEATURES).head())
     print(f"\n🔹 Corresponding target temperature (1s ahead): {y[0][0]:.4f}")
